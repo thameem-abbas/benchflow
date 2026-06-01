@@ -810,6 +810,13 @@ def _patch_recipe_modelserver_overlay(plan: ResolvedRunPlan, overlay_dir: Path) 
             }
         )
 
+    if not any(str(vm.get("name") or "") == "tensorrt-llm-tmp" for vm in volume_mounts):
+        volume_mounts.append(
+            {"name": "tensorrt-llm-tmp", "mountPath": "/.tensorrt_llm"}
+        )
+    if not any(str(v.get("name") or "") == "tensorrt-llm-tmp" for v in volumes):
+        volumes.append({"name": "tensorrt-llm-tmp", "emptyDir": {}})
+
     pod_spec = (
         patch.setdefault("spec", {}).setdefault("template", {}).setdefault("spec", {})
     )
