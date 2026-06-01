@@ -1,0 +1,38 @@
+apiVersion: benchflow.io/v1alpha1
+kind: DeploymentProfile
+metadata:
+  name: dynamo-agg-kv-router-qwen3-32b-ibmcluster
+spec:
+  platform: dynamo
+  mode: aggregate
+  endpoint_path: /v1/models
+  gateway: none
+  options:
+    router_mode: kv
+    hf_secret_name: hf-token-secret
+    model_cache_pvc: models-storage
+    compilation_cache_pvc: compilation-cache
+    use_dra_resources: true
+    kv_transfer_config: '{"kv_connector":"DynamoConnector","kv_role":"kv_both","kv_connector_module_path":"kvbm.vllm_integration.connector"}'
+    kvbm_cpu_cache_gb: "100"
+    max_model_len: "131072"
+    hf_overrides: '{"rope_scaling":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768},"max_position_embeddings":131072}'
+    router_args:
+      - --active-decode-blocks-threshold
+      - None
+      - --active-prefill-tokens-threshold
+      - None
+      - --active-prefill-tokens-threshold-frac
+      - None
+  model_storage:
+    pvc_name: models-storage
+    cache_dir: /home/dynamo/.cache/huggingface
+    mount_path: /home/dynamo/.cache/huggingface
+  runtime:
+    image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1
+    replicas: 8
+    tensor_parallelism: 2
+    vllm_args:
+      - --gpu-memory-utilization=0.90
+      - --async-scheduling
+      - --block-size=64
