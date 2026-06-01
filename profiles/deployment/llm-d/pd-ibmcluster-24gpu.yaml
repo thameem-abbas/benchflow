@@ -6,7 +6,7 @@ spec:
   platform: llm-d
   mode: pd-disaggregation
   repo_url: https://github.com/llm-d/llm-d.git
-  repo_ref: v0.7
+  repo_ref: v0.7.0
   gateway: standalone
   endpoint_path: /v1/models
   model_storage:
