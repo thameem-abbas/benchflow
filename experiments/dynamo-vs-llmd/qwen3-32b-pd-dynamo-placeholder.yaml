@@ -1,0 +1,29 @@
+# Placeholder: Dynamo P/D disaggregation experiment
+#
+# NOT RUNNABLE — Dynamo P/D is currently broken:
+# - benchflow deploy/dynamo.py only supports mode: aggregate
+# - DGD with prefill/decode subComponentType deploys but NIXL KV transfer is unreliable
+# - Revisit when dynamo v1.2+ ships P/D fixes
+#
+# When ready, this experiment would mirror qwen3-32b-pd-llmd.yaml:
+# - 3 GPU budgets: 8, 16, 32
+# - Prefill TP=1, Decode TP=2 (1:2 ratio)
+# - 50/50 GPU allocation between prefill and decode
+#
+# apiVersion: benchflow.io/v1alpha1
+# kind: Experiment
+# metadata:
+#   name: qwen3-32b-pd-dynamo
+# spec:
+#   model:
+#     name: Qwen/Qwen3-32B-FP8
+#   deployment_profile:
+#     - dynamo-pd-ibmcluster-8gpu    # does not exist yet
+#     - dynamo-pd-ibmcluster-16gpu
+#     - dynamo-pd-ibmcluster-32gpu
+#   benchmark_profile:
+#     - guidellm-scaling-1k-1k
+#   metrics_profile: dynamo
+#   namespace: benchflow-pd-dynamo
+#   execution:
+#     timeout: 4h

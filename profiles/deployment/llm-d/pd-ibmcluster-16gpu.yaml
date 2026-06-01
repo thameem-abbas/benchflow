@@ -1,0 +1,47 @@
+apiVersion: benchflow.io/v1alpha1
+kind: DeploymentProfile
+metadata:
+  name: llm-d-pd-ibmcluster-16gpu
+spec:
+  platform: llm-d
+  mode: pd-disaggregation
+  repo_url: https://github.com/llm-d/llm-d.git
+  repo_ref: v0.7
+  gateway: standalone
+  endpoint_path: /v1/models
+  model_storage:
+    pvc_name: models-storage
+    cache_dir: /models
+    mount_path: /model-cache
+  runtime:
+    replicas: 4
+    tensor_parallelism: 2
+    resources:
+      requests:
+        dra.llm-d.io/gpu-nic-pair: "2"
+        nvidia.com/gpu: "0"
+      limits:
+        dra.llm-d.io/gpu-nic-pair: "2"
+        nvidia.com/gpu: "0"
+    vllm_args:
+      - --block-size=128
+      - --gpu-memory-utilization=0.90
+      - --kv-transfer-config={"kv_connector":"NixlConnector","kv_role":"kv_both"}
+      - --disable-uvicorn-access-log
+  prefill:
+    replicas: 8
+    tensor_parallelism: 1
+    resources:
+      requests:
+        dra.llm-d.io/gpu-nic-pair: "1"
+        nvidia.com/gpu: "0"
+      limits:
+        dra.llm-d.io/gpu-nic-pair: "1"
+        nvidia.com/gpu: "0"
+    vllm_args:
+      - --block-size=128
+      - --gpu-memory-utilization=0.90
+      - --kv-transfer-config={"kv_connector":"NixlConnector","kv_role":"kv_both"}
+      - --disable-uvicorn-access-log
+  options:
+    enable_rdma: true

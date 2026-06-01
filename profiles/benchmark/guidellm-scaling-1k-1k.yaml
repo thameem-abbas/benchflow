@@ -1,0 +1,13 @@
+apiVersion: benchflow.io/v1alpha1
+kind: BenchmarkProfile
+metadata:
+  name: guidellm-scaling-1k-1k
+spec:
+  guidellm:
+    backend_type: openai_http
+    rate_type: concurrent
+    rates: [1, 10, 50, 100, 200]
+    data: prompt_tokens=1000,output_tokens=1000
+    max_seconds: 600
+  env:
+    GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL: "INFO"

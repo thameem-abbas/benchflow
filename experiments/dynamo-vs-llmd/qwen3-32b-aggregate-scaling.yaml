@@ -1,0 +1,24 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-aggregate-scaling
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile:
+    - dynamo-agg-kv-router-qwen3-32b
+    - llm-d-optimized-baseline-ibmcluster
+  benchmark_profile:
+    - guidellm-scaling-1k-1k
+  metrics_profile: dynamo
+  namespace: benchflow-scaling
+  execution:
+    timeout: 4h
+  overrides:
+    scale:
+      replicas: [4, 8, 12]
+  mlflow:
+    tags:
+      experiment_type: aggregate-scaling
+      model: Qwen3-32B
+      accelerator: H100

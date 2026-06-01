@@ -1,0 +1,23 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-pd-llmd
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile:
+    - llm-d-pd-ibmcluster-8gpu
+    - llm-d-pd-ibmcluster-16gpu
+    - llm-d-pd-ibmcluster-24gpu
+  benchmark_profile:
+    - guidellm-scaling-1k-1k
+  metrics_profile: detailed
+  namespace: benchflow-pd
+  execution:
+    timeout: 4h
+  mlflow:
+    tags:
+      experiment_type: pd-disaggregation
+      model: Qwen3-32B
+      accelerator: H100
+      pd_tp_ratio: "1:2"
