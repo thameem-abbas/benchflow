@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any
 import json
 
-from ..cleanup import cleanup_llmd, cleanup_rhaiis, cleanup_rhoai
+from ..cleanup import cleanup_dynamo, cleanup_llmd, cleanup_rhaiis, cleanup_rhoai
 from ..cluster import require_any_command, resolve_target_base_url, use_kubeconfig
 from ..contracts import ExecutionContext, ResolvedRunPlan, ValidationError
-from ..deploy import deploy_llmd, deploy_rhaiis, deploy_rhoai
+from ..deploy import deploy_dynamo, deploy_llmd, deploy_rhaiis, deploy_rhoai
 from ..platform_state import (
     clear_cluster_platform_state,
     load_cluster_platform_state,
@@ -332,6 +332,14 @@ def deploy_platform(
                 verify=verify,
                 verify_timeout_seconds=verify_timeout_seconds,
             )
+        if plan.deployment.platform == "dynamo":
+            return deploy_dynamo(
+                plan,
+                manifests_dir=manifests_dir,
+                skip_if_exists=skip_if_exists,
+                verify=verify,
+                verify_timeout_seconds=verify_timeout_seconds,
+            )
         raise ValidationError(
             f"unsupported deployment platform: {plan.deployment.platform}"
         )
@@ -363,6 +371,14 @@ def cleanup_deployment(
             return
         if plan.deployment.platform == "rhaiis":
             cleanup_rhaiis(
+                plan,
+                wait_for_deletion=wait_for_deletion,
+                timeout_seconds=timeout_seconds,
+                skip_if_not_exists=skip_if_not_exists,
+            )
+            return
+        if plan.deployment.platform == "dynamo":
+            cleanup_dynamo(
                 plan,
                 wait_for_deletion=wait_for_deletion,
                 timeout_seconds=timeout_seconds,

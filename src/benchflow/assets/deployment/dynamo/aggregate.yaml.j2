@@ -1,0 +1,116 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: {{ release_name }}
+  namespace: {{ namespace }}
+  labels:
+{% for key, value in labels.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+spec:
+  pvcs:
+  - create: false
+    name: {{ model_cache_pvc }}
+{% if compilation_cache_pvc %}
+  - create: false
+    name: {{ compilation_cache_pvc }}
+{% endif %}
+  services:
+    Frontend:
+      componentType: frontend
+      envs:
+        - name: HF_HOME
+          value: {{ hf_home }}
+      extraPodSpec:
+        mainContainer:
+          image: {{ runtime_image }}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.frontend
+          args:
+{% if router_mode == "kv" %}
+            - --router-mode
+            - kv
+{% endif %}
+            - --router-reset-states
+{% for arg in router_args %}
+            - {{ arg }}
+{% endfor %}
+      replicas: 1
+      resources:
+        requests:
+          cpu: "{{ frontend_cpu }}"
+        limits:
+          cpu: "{{ frontend_cpu }}"
+      subComponentType: null
+    VllmDecodeWorker:
+      componentType: worker
+      envFromSecret: {{ hf_secret_name }}
+      volumeMounts:
+      - name: {{ model_cache_pvc }}
+        mountPoint: {{ hf_home }}
+{% if compilation_cache_pvc %}
+      - name: {{ compilation_cache_pvc }}
+        mountPoint: /home/dynamo/.cache/vllm
+        useAsCompilationCache: true
+{% endif %}
+      extraPodSpec:
+        mainContainer:
+          args:
+          - --model
+          - {{ model_name }}
+          - --tensor-parallel-size
+          - '{{ tensor_parallelism }}'
+{% if kv_transfer_config %}
+          - --kv-transfer-config
+          - '{{ kv_transfer_config }}'
+{% endif %}
+          - --no-enable-log-requests
+{% for arg in vllm_args %}
+          - {{ arg }}
+{% endfor %}
+{% if hf_overrides %}
+          - --hf-overrides
+          - '{{ hf_overrides }}'
+{% endif %}
+{% if max_model_len %}
+          - --max-model-len
+          - '{{ max_model_len }}'
+{% endif %}
+          command:
+          - python3
+          - -m
+          - dynamo.vllm
+          image: {{ runtime_image }}
+          env:
+          - name: DYN_HEALTH_CHECK_ENABLED
+            value: "false"
+          - name: HF_HOME
+            value: {{ hf_home }}
+{% if kvbm_cpu_cache_gb %}
+          - name: DYN_KVBM_CPU_CACHE_GB
+            value: "{{ kvbm_cpu_cache_gb }}"
+{% endif %}
+{% for entry in worker_env %}
+          - name: {{ entry.name }}
+            value: "{{ entry.value }}"
+{% endfor %}
+          workingDir: /workspace
+      replicas: {{ worker_replicas }}
+      resources:
+{% if use_dra_resources %}
+        limits:
+          custom:
+            dra.llm-d.io/gpu-nic-pair: '{{ tensor_parallelism }}'
+        requests:
+          custom:
+            dra.llm-d.io/gpu-nic-pair: '{{ tensor_parallelism }}'
+{% else %}
+        limits:
+          gpu: '{{ tensor_parallelism }}'
+        requests:
+          gpu: '{{ tensor_parallelism }}'
+{% endif %}
+      subComponentType: decode

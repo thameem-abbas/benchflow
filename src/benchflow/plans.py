@@ -145,6 +145,13 @@ def _target_for(
             path=path,
         )
 
+    if platform == "dynamo":
+        return TargetSpec(
+            discovery="static",
+            base_url=f"http://{release_name}-frontend.{namespace}.svc.cluster.local:8000",
+            path=path,
+        )
+
     return TargetSpec(
         discovery="static",
         base_url=f"http://{release_name}-predictor.{namespace}.svc.cluster.local:8080",

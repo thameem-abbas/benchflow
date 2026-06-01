@@ -411,6 +411,53 @@ def render_rhaiis_raw_vllm_manifests(plan: ResolvedRunPlan) -> list[dict[str, An
     return [deployment, service, servicemonitor]
 
 
+def dynamo_dgd_name(plan: ResolvedRunPlan) -> str:
+    return plan.deployment.release_name
+
+
+def _dynamo_template_context(plan: ResolvedRunPlan) -> dict[str, Any]:
+    opts = plan.deployment.options
+    router_mode = str(opts.get("router_mode", "round-robin")).strip()
+    return {
+        "release_name": plan.deployment.release_name,
+        "namespace": plan.deployment.namespace,
+        "labels": _base_labels(plan),
+        "model_name": plan.model.name,
+        "runtime_image": plan.deployment.runtime.image,
+        "worker_replicas": plan.deployment.runtime.replicas,
+        "tensor_parallelism": plan.deployment.runtime.tensor_parallelism,
+        "vllm_args": plan.deployment.runtime.vllm_args,
+        "max_model_len": str(opts.get("max_model_len", "")).strip() or None,
+        "hf_overrides": str(opts.get("hf_overrides", "")).strip() or None,
+        "router_mode": router_mode,
+        "router_args": list(opts.get("router_args") or []),
+        "kv_transfer_config": str(opts.get("kv_transfer_config", "")).strip() or None,
+        "kvbm_cpu_cache_gb": str(opts.get("kvbm_cpu_cache_gb", "")).strip() or None,
+        "hf_secret_name": str(opts.get("hf_secret_name", "hf-token-secret")).strip(),
+        "model_cache_pvc": str(
+            opts.get("model_cache_pvc", plan.deployment.model_storage.pvc_name)
+        ).strip(),
+        "compilation_cache_pvc": str(opts.get("compilation_cache_pvc", "")).strip()
+        or None,
+        "hf_home": plan.deployment.model_storage.cache_dir,
+        "use_dra_resources": bool(opts.get("use_dra_resources", False)),
+        "worker_env": list(opts.get("worker_env") or []),
+        "frontend_cpu": str(opts.get("frontend_cpu", "8")).strip(),
+    }
+
+
+def render_dynamo_dgd_manifest(plan: ResolvedRunPlan) -> dict[str, Any]:
+    if plan.deployment.mode != "aggregate":
+        raise ValidationError(
+            f"unsupported Dynamo deployment mode: {plan.deployment.mode}; "
+            "only 'aggregate' is currently supported"
+        )
+    return render_jinja_yaml_document(
+        "deployment/dynamo/aggregate.yaml.j2",
+        _dynamo_template_context(plan),
+    )
+
+
 def write_deployment_assets(plan: ResolvedRunPlan, output_dir: Path) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -448,6 +495,15 @@ def write_deployment_assets(plan: ResolvedRunPlan, output_dir: Path) -> list[Pat
                 yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8"
             )
             written.append(target)
+        return written
+
+    if plan.deployment.platform == "dynamo":
+        target = output_dir / "dynamographdeployment.yaml"
+        target.write_text(
+            yaml.safe_dump(render_dynamo_dgd_manifest(plan), sort_keys=False),
+            encoding="utf-8",
+        )
+        written.append(target)
         return written
 
     raise ValidationError(
