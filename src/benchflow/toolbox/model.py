@@ -39,13 +39,14 @@ def download_cached_model(
             ],
         )
         if plan.deployment.platform == "dynamo":
-            subdir = plan.model.hf_cache_directory_name
-        else:
-            subdir = plan.model.pvc_directory_name
+            return (
+                Path("/models-storage")
+                / plan.model.hf_cache_directory_name
+            )
         return (
             Path("/models-storage")
             / plan.deployment.model_storage.cache_dir.lstrip("/")
-            / subdir
+            / plan.model.pvc_directory_name
         )
     if context.models_storage_path is None:
         raise ValidationError("model download requires a models storage path")

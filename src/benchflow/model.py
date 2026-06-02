@@ -46,14 +46,16 @@ def download_model(
     skip_if_exists: bool = True,
 ) -> Path:
     if plan.deployment.platform == "dynamo":
-        subdir = plan.model.hf_cache_directory_name
+        target_dir = (
+            models_storage_path
+            / plan.model.hf_cache_directory_name
+        )
     else:
-        subdir = plan.model.pvc_directory_name
-    target_dir = (
-        models_storage_path
-        / plan.deployment.model_storage.cache_dir.lstrip("/")
-        / subdir
-    )
+        target_dir = (
+            models_storage_path
+            / plan.deployment.model_storage.cache_dir.lstrip("/")
+            / plan.model.pvc_directory_name
+        )
     step(f"Preparing model cache for {plan.model.name}")
     detail(f"Target directory: {target_dir}")
     if skip_if_exists and _has_model_weights(target_dir):
