@@ -625,6 +625,7 @@ def load_deployment_profile(path: Path) -> DeploymentProfile:
         platform=str(spec.get("platform", "")),
         mode=str(spec.get("mode", "")),
         runtime=_runtime_from_dict(spec.get("runtime")),
+        prefill=_runtime_from_dict(spec.get("prefill")) if spec.get("prefill") else None,
         model_storage=_storage_from_dict(spec.get("model_storage")),
         namespace=spec.get("namespace"),
         repo_url=str(spec.get("repo_url", "https://github.com/llm-d/llm-d.git")),
@@ -723,6 +724,7 @@ def load_run_plan_data(raw: dict[str, Any]) -> ResolvedRunPlan:
             _require(deployment_raw.get("release_name"), "deployment.release_name")
         ),
         runtime=_runtime_from_dict(deployment_raw.get("runtime")),
+        prefill=_runtime_from_dict(deployment_raw.get("prefill")) if deployment_raw.get("prefill") else None,
         model_storage=_storage_from_dict(deployment_raw.get("model_storage")),
         repo_url=str(
             deployment_raw.get("repo_url", "https://github.com/llm-d/llm-d.git")
