@@ -10,7 +10,7 @@ spec:
   options:
     router_mode: kv
     hf_secret_name: hf-token-secret
-    model_cache_pvc: models-storage
+    model_cache_pvc: dynamo-model-cache
     compilation_cache_pvc: compilation-cache
     use_dra_resources: true
     kv_transfer_config: '{"kv_connector":"DynamoConnector","kv_role":"kv_both","kv_connector_module_path":"kvbm.vllm_integration.connector"}'
@@ -25,7 +25,7 @@ spec:
       - --active-prefill-tokens-threshold-frac
       - None
   model_storage:
-    pvc_name: models-storage
+    pvc_name: dynamo-model-cache
     cache_dir: /home/dynamo/.cache/huggingface
     mount_path: /home/dynamo/.cache/huggingface
   runtime:
