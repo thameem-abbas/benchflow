@@ -13,8 +13,6 @@ spec:
     model_cache_pvc: dynamo-model-cache
     compilation_cache_pvc: compilation-cache
     use_dra_resources: true
-    kv_transfer_config: '{"kv_connector":"DynamoConnector","kv_role":"kv_both","kv_connector_module_path":"kvbm.vllm_integration.connector"}'
-    kvbm_cpu_cache_gb: "100"
     max_model_len: "131072"
     hf_overrides: '{"rope_scaling":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768},"max_position_embeddings":131072}'
     router_args:
