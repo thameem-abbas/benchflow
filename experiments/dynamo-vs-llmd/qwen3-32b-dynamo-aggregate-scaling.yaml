@@ -1,0 +1,23 @@
+# Blocked — see https://github.com/thameem-abbas/benchflow/issues/2
+# Run after resolving: NFS permissions, SCC, model download path, compilation cache
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-dynamo-aggregate-scaling
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile: dynamo-agg-kv-router-qwen3-32b-ibmcluster
+  benchmark_profile: guidellm-scaling-1k-1k
+  metrics_profile: dynamo
+  namespace: benchflow
+  execution:
+    timeout: 4h
+  overrides:
+    scale:
+      replicas: [4, 8, 12]
+  mlflow:
+    tags:
+      experiment_type: aggregate-scaling
+      model: Qwen3-32B-FP8
+      accelerator: H100

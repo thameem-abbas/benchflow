@@ -1,0 +1,21 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-llmd-aggregate-scaling
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile: llm-d-optimized-baseline-ibmcluster
+  benchmark_profile: aiperf-mooncake-trace-2k
+  metrics_profile: detailed
+  namespace: benchflow
+  execution:
+    timeout: 4h
+  overrides:
+    scale:
+      replicas: [8, 12]
+  mlflow:
+    tags:
+      experiment_type: aggregate-scaling
+      model: Qwen3-32B-FP8
+      accelerator: H100
