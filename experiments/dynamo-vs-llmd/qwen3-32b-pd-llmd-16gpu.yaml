@@ -1,15 +1,12 @@
 apiVersion: benchflow.io/v1alpha1
 kind: Experiment
 metadata:
-  name: qwen3-32b-pd-llmd
+  name: qwen3-32b-pd-llmd-16gpu
 spec:
   model:
     name: Qwen/Qwen3-32B-FP8
-  deployment_profile:
-    - llm-d-pd-ibmcluster-16gpu
-    - llm-d-pd-ibmcluster-24gpu
-  benchmark_profile:
-    - aiperf-mooncake-trace-2k
+  deployment_profile: llm-d-pd-ibmcluster-16gpu
+  benchmark_profile: aiperf-mooncake-trace-2k
   metrics_profile: detailed
   namespace: benchflow
   execution:
@@ -20,3 +17,6 @@ spec:
       model: Qwen3-32B-FP8
       accelerator: H100
       pd_tp_ratio: "1:2"
+      prefill_replicas: "8"
+      decode_replicas: "4"
+      total_gpus: "16"

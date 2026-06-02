@@ -93,6 +93,8 @@ def _llmd_recipe_guide_name(plan: ResolvedRunPlan) -> str:
     mode = str(plan.deployment.mode or "").strip()
     if mode == "precise-prefix-cache":
         return "precise-prefix-cache-aware"
+    if mode == "pd-disaggregation":
+        return "pd-disaggregation"
     return "optimized-baseline"
 
 
@@ -702,134 +704,177 @@ def _patch_recipe_modelserver_overlay(plan: ResolvedRunPlan, overlay_dir: Path) 
         yaml.safe_dump(kustomization, sort_keys=False), encoding="utf-8"
     )
 
-    patch = yaml.safe_load(patch_path.read_text(encoding="utf-8"))
-    if not isinstance(patch, dict):
-        raise CommandError(f"expected llm-d modelserver patch not found: {patch_path}")
-    runtime = plan.deployment.runtime
-    spec = patch.setdefault("spec", {})
-    spec["replicas"] = runtime.replicas
-    container = _recipe_modelserver_container(patch)
-    args = [
-        _model_mount_path(plan),
-        "--disable-access-log-for-endpoints=/health,/metrics,/v1/models",
-        f"--tensor-parallel-size={runtime.tensor_parallelism}",
-        "--served-model-name",
-        plan.model.name,
-    ]
-    env: list[dict[str, Any]] = []
-    if plan.deployment.mode == "precise-prefix-cache":
-        env.extend(
-            [
-                {
-                    "name": "NAMESPACE",
-                    "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}},
-                },
-                {
-                    "name": "POD_IP",
-                    "valueFrom": {"fieldRef": {"fieldPath": "status.podIP"}},
-                },
-                {"name": "POD_PORT", "value": "8000"},
-                {"name": "KV_EVENTS_ENDPOINT", "value": "tcp://*:5556"},
-                {"name": "DO_NOT_TRACK", "value": "1"},
-            ]
-        )
-        args.extend(
-            [
-                "--block-size=64",
-                "--kv-events-config",
-                json.dumps(
+    is_pd = plan.deployment.mode == "pd-disaggregation"
+    if is_pd:
+        patch_files = [
+            (overlay_dir / "patch-decode.yaml", "decode"),
+            (overlay_dir / "patch-prefill.yaml", "prefill"),
+        ]
+    else:
+        patch_files = [(overlay_dir / "patch-vllm.yaml", "decode")]
+
+    for patch_path, role in patch_files:
+        patch = yaml.safe_load(patch_path.read_text(encoding="utf-8"))
+        if not isinstance(patch, dict):
+            raise CommandError(
+                f"expected llm-d modelserver patch not found: {patch_path}"
+            )
+
+        runtime = plan.deployment.runtime
+        if is_pd and role == "prefill" and hasattr(plan.deployment, "prefill"):
+            prefill = plan.deployment.prefill
+            replicas = prefill.replicas
+            tp = prefill.tensor_parallelism
+            extra_vllm_args = list(prefill.vllm_args)
+        else:
+            replicas = runtime.replicas
+            tp = runtime.tensor_parallelism
+            extra_vllm_args = list(runtime.vllm_args)
+
+        spec = patch.setdefault("spec", {})
+        spec["replicas"] = replicas
+        container = _recipe_modelserver_container(patch)
+        args = [
+            _model_mount_path(plan),
+            "--disable-access-log-for-endpoints=/health,/metrics,/v1/models",
+            f"--tensor-parallel-size={tp}",
+            "--served-model-name",
+            plan.model.name,
+        ]
+        env: list[dict[str, Any]] = []
+        if plan.deployment.mode == "precise-prefix-cache":
+            env.extend(
+                [
                     {
-                        "enable_kv_cache_events": True,
-                        "publisher": "zmq",
-                        "endpoint": "$(KV_EVENTS_ENDPOINT)",
-                        "topic": (f"kv@$(POD_IP):$(POD_PORT)@{plan.model.name}"),
+                        "name": "NAMESPACE",
+                        "valueFrom": {
+                            "fieldRef": {"fieldPath": "metadata.namespace"}
+                        },
                     },
-                    separators=(",", ":"),
-                ),
-            ]
-        )
+                    {
+                        "name": "POD_IP",
+                        "valueFrom": {"fieldRef": {"fieldPath": "status.podIP"}},
+                    },
+                    {"name": "POD_PORT", "value": "8000"},
+                    {"name": "KV_EVENTS_ENDPOINT", "value": "tcp://*:5556"},
+                    {"name": "DO_NOT_TRACK", "value": "1"},
+                ]
+            )
+            args.extend(
+                [
+                    "--block-size=64",
+                    "--kv-events-config",
+                    json.dumps(
+                        {
+                            "enable_kv_cache_events": True,
+                            "publisher": "zmq",
+                            "endpoint": "$(KV_EVENTS_ENDPOINT)",
+                            "topic": (
+                                f"kv@$(POD_IP):$(POD_PORT)@{plan.model.name}"
+                            ),
+                        },
+                        separators=(",", ":"),
+                    ),
+                ]
+            )
 
-    managed_env_names = {"CUDA_VISIBLE_DEVICES", *runtime.env.keys()}
-    if plan.deployment.mode == "precise-prefix-cache":
-        managed_env_names.update(
-            {"NAMESPACE", "POD_IP", "POD_PORT", "KV_EVENTS_ENDPOINT", "DO_NOT_TRACK"}
-        )
-    existing_env = [
-        entry
-        for entry in list(container.get("env") or [])
-        if str(entry.get("name") or "") not in managed_env_names
-    ]
-    existing_env.append(
-        {
-            "name": "CUDA_VISIBLE_DEVICES",
-            "value": _cuda_visible_devices(runtime.tensor_parallelism),
-        }
-    )
-    existing_env.extend(
-        {"name": key, "value": value} for key, value in sorted(runtime.env.items())
-    )
-    existing_env.append(
-        {
-            "name": "HF_TOKEN",
-            "valueFrom": {
-                "secretKeyRef": {"name": "huggingface-token", "key": "HF_TOKEN"}
-            },
-        }
-    )
-    existing_env.extend(env)
-
-    container["command"] = ["vllm", "serve"]
-    container["args"] = args + list(runtime.vllm_args)
-    container["env"] = existing_env
-    _apply_runtime_resources(container, plan)
-
-    volume_mounts = container.setdefault("volumeMounts", [])
-    if not any(
-        str(volume_mount.get("name") or "") == "models-storage"
-        for volume_mount in volume_mounts
-    ):
-        volume_mounts.append(
+        managed_env_names = {"CUDA_VISIBLE_DEVICES", *runtime.env.keys()}
+        if plan.deployment.mode == "precise-prefix-cache":
+            managed_env_names.update(
+                {
+                    "NAMESPACE",
+                    "POD_IP",
+                    "POD_PORT",
+                    "KV_EVENTS_ENDPOINT",
+                    "DO_NOT_TRACK",
+                }
+            )
+        existing_env = [
+            entry
+            for entry in list(container.get("env") or [])
+            if str(entry.get("name") or "") not in managed_env_names
+        ]
+        existing_env.append(
             {
-                "name": "models-storage",
-                "mountPath": storage.mount_path,
-                "readOnly": True,
+                "name": "CUDA_VISIBLE_DEVICES",
+                "value": _cuda_visible_devices(tp),
             }
         )
-
-    volumes = (
-        patch.setdefault("spec", {})
-        .setdefault("template", {})
-        .setdefault("spec", {})
-        .setdefault("volumes", [])
-    )
-    if not any(str(volume.get("name") or "") == "models-storage" for volume in volumes):
-        volumes.append(
+        existing_env.extend(
+            {"name": key, "value": value}
+            for key, value in sorted(runtime.env.items())
+        )
+        existing_env.append(
             {
-                "name": "models-storage",
-                "persistentVolumeClaim": {"claimName": storage.pvc_name},
+                "name": "HF_TOKEN",
+                "valueFrom": {
+                    "secretKeyRef": {"name": "huggingface-token", "key": "HF_TOKEN"}
+                },
             }
         )
+        existing_env.extend(env)
 
-    if not any(str(vm.get("name") or "") == "tensorrt-llm-tmp" for vm in volume_mounts):
-        volume_mounts.append(
-            {"name": "tensorrt-llm-tmp", "mountPath": "/.tensorrt_llm"}
+        container["command"] = ["vllm", "serve"]
+        container["args"] = args + extra_vllm_args
+        container["env"] = existing_env
+        _apply_runtime_resources(container, plan)
+
+        volume_mounts = container.setdefault("volumeMounts", [])
+        if not any(
+            str(vm.get("name") or "") == "models-storage" for vm in volume_mounts
+        ):
+            volume_mounts.append(
+                {
+                    "name": "models-storage",
+                    "mountPath": storage.mount_path,
+                    "readOnly": True,
+                }
+            )
+
+        volumes = (
+            patch.setdefault("spec", {})
+            .setdefault("template", {})
+            .setdefault("spec", {})
+            .setdefault("volumes", [])
         )
-    if not any(str(v.get("name") or "") == "tensorrt-llm-tmp" for v in volumes):
-        volumes.append({"name": "tensorrt-llm-tmp", "emptyDir": {}})
+        if not any(
+            str(v.get("name") or "") == "models-storage" for v in volumes
+        ):
+            volumes.append(
+                {
+                    "name": "models-storage",
+                    "persistentVolumeClaim": {"claimName": storage.pvc_name},
+                }
+            )
 
-    pod_spec = (
-        patch.setdefault("spec", {}).setdefault("template", {}).setdefault("spec", {})
-    )
-    if runtime.node_selector:
-        pod_spec["nodeSelector"] = dict(runtime.node_selector)
-    if runtime.affinity:
-        pod_spec["affinity"] = dict(runtime.affinity)
-    if runtime.tolerations:
-        pod_spec["tolerations"] = list(runtime.tolerations)
-    if runtime.image_pull_secrets:
-        pod_spec["imagePullSecrets"] = list(runtime.image_pull_secrets)
+        if not any(
+            str(vm.get("name") or "") == "tensorrt-llm-tmp" for vm in volume_mounts
+        ):
+            volume_mounts.append(
+                {"name": "tensorrt-llm-tmp", "mountPath": "/.tensorrt_llm"}
+            )
+        if not any(
+            str(v.get("name") or "") == "tensorrt-llm-tmp" for v in volumes
+        ):
+            volumes.append({"name": "tensorrt-llm-tmp", "emptyDir": {}})
 
-    patch_path.write_text(yaml.safe_dump(patch, sort_keys=False), encoding="utf-8")
+        pod_spec = (
+            patch.setdefault("spec", {})
+            .setdefault("template", {})
+            .setdefault("spec", {})
+        )
+        if runtime.node_selector:
+            pod_spec["nodeSelector"] = dict(runtime.node_selector)
+        if runtime.affinity:
+            pod_spec["affinity"] = dict(runtime.affinity)
+        if runtime.tolerations:
+            pod_spec["tolerations"] = list(runtime.tolerations)
+        if runtime.image_pull_secrets:
+            pod_spec["imagePullSecrets"] = list(runtime.image_pull_secrets)
+
+        patch_path.write_text(
+            yaml.safe_dump(patch, sort_keys=False), encoding="utf-8"
+        )
 
 
 def _patch_recipe_gateway(plan: ResolvedRunPlan, gateway_dir: Path) -> None:

@@ -425,6 +425,7 @@ def resolve_run_plan(
         scheduler_image=scheduler_image,
         options=options,
         target=target,
+        prefill=deployment_profile.spec.prefill,
     )
 
     tags = dict(experiment.spec.mlflow.tags)

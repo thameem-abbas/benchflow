@@ -381,6 +381,7 @@ class DeploymentProfileSpec:
     platform: str
     mode: str
     runtime: RuntimeSpec = field(default_factory=RuntimeSpec)
+    prefill: RuntimeSpec | None = None
     model_storage: ModelStorageSpec = field(default_factory=ModelStorageSpec)
     namespace: str | None = None
     repo_url: str = "https://github.com/llm-d/llm-d.git"
@@ -576,6 +577,7 @@ class ResolvedDeployment:
     scheduler_image: str
     options: dict[str, Any]
     target: TargetSpec
+    prefill: RuntimeSpec | None = None
 
 
 @dataclass(slots=True)
