@@ -1,0 +1,23 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-dynamo-agg-4r-kvbm-mooncake
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile: dynamo-agg-kv-router-qwen3-32b-ibmcluster-kvbm
+  benchmark_profile: aiperf-mooncake-trace-2k
+  metrics_profile: dynamo
+  namespace: benchflow
+  execution:
+    timeout: 4h
+  overrides:
+    scale:
+      replicas: 4
+  mlflow:
+    tags:
+      experiment_type: aggregate-scaling
+      model: Qwen3-32B-FP8
+      accelerator: H100
+      framework: dynamo-kvbm
+      replicas: "4"
