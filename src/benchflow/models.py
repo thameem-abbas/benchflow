@@ -149,6 +149,11 @@ class ModelSpec:
         return self.resolved_name().replace("/", "-")
 
     @property
+    def hf_cache_directory_name(self) -> str:
+        parts = self.resolved_name().split("/")
+        return f"hub/models--{'--'.join(parts)}"
+
+    @property
     def resource_name(self) -> str:
         return sanitize_name(self.resolved_name())
 

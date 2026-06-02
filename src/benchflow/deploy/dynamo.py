@@ -9,7 +9,7 @@ import yaml
 from ..cluster import CommandError, require_any_command, run_command, run_json_command
 from ..models import ResolvedRunPlan, ValidationError
 from ..renderers.deployment import dynamo_dgd_name, render_dynamo_dgd_manifest
-from ..ui import detail, step, success
+from ..ui import detail, step, success, warning
 
 
 def _ensure_supported_mode(plan: ResolvedRunPlan) -> None:
@@ -93,6 +93,47 @@ def _verify_dgd(
     )
 
 
+def _wait_for_service_account(
+    namespace: str,
+    sa_name: str,
+    kubectl_cmd: str,
+    timeout_seconds: int = 60,
+) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        result = run_command(
+            [kubectl_cmd, "get", "serviceaccount", sa_name, "-n", namespace, "-o", "name"],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return True
+        time.sleep(3)
+    return False
+
+
+def _grant_anyuid_scc(
+    namespace: str, sa_name: str, kubectl_cmd: str
+) -> None:
+    if kubectl_cmd != "oc":
+        detail("Skipping SCC grant on non-OpenShift cluster")
+        return
+    result = run_command(
+        [
+            "oc", "adm", "policy", "add-scc-to-user", "anyuid",
+            "-z", sa_name, "-n", namespace,
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        success(f"Granted anyuid SCC to {sa_name}")
+    else:
+        warning(f"Could not grant anyuid SCC to {sa_name}")
+        if result.stderr:
+            detail(result.stderr.strip())
+
+
 def deploy_dynamo(
     plan: ResolvedRunPlan,
     *,
@@ -130,6 +171,13 @@ def deploy_dynamo(
         input_text=yaml.safe_dump(manifest, sort_keys=False),
     )
     success(f"Applied DynamoGraphDeployment {dgd_name} in namespace {namespace}")
+
+    sa_name = f"{plan.deployment.release_name}-k8s-service-discovery"
+    step(f"Granting anyuid SCC to service account {sa_name}")
+    if _wait_for_service_account(namespace, sa_name, kubectl_cmd):
+        _grant_anyuid_scc(namespace, sa_name, kubectl_cmd)
+    else:
+        warning(f"Service account {sa_name} not found after 60s; SCC grant skipped")
 
     if verify:
         try:

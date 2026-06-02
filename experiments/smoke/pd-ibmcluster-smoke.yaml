@@ -1,0 +1,13 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: pd
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile: llm-d-pd-disaggregation-ibmcluster
+  benchmark_profile: guidellm-smoke
+  metrics_profile: detailed
+  namespace: llm-d-thibrahi
+  execution:
+    timeout: 4h

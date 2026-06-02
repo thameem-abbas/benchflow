@@ -6,12 +6,11 @@ spec:
   model:
     name: Qwen/Qwen3-32B-FP8
   deployment_profile:
-    - dynamo-agg-kv-router-qwen3-32b-ibmcluster
     - llm-d-optimized-baseline-ibmcluster
   benchmark_profile:
     - guidellm-scaling-1k-1k
-  metrics_profile: dynamo
-  namespace: benchflow-scaling
+  metrics_profile: detailed
+  namespace: benchflow
   execution:
     timeout: 4h
   overrides:

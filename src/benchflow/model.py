@@ -45,10 +45,14 @@ def download_model(
     models_storage_path: Path,
     skip_if_exists: bool = True,
 ) -> Path:
+    if plan.deployment.platform == "dynamo":
+        subdir = plan.model.hf_cache_directory_name
+    else:
+        subdir = plan.model.pvc_directory_name
     target_dir = (
         models_storage_path
         / plan.deployment.model_storage.cache_dir.lstrip("/")
-        / plan.model.pvc_directory_name
+        / subdir
     )
     step(f"Preparing model cache for {plan.model.name}")
     detail(f"Target directory: {target_dir}")
@@ -92,6 +96,13 @@ def download_model(
         raise CommandError(
             f"download completed but no model weights were found in {target_dir}"
         )
+    if plan.deployment.platform == "dynamo":
+        step("Setting model cache permissions for NFS compatibility")
+        for root, dirs, files in os.walk(target_dir):
+            for name in dirs + files:
+                os.chmod(os.path.join(root, name), 0o777)
+        os.chmod(str(target_dir), 0o777)
+        success("Model cache permissions set to 777")
     success(f"Downloaded model weights to {target_dir}")
 
     return target_dir

@@ -1,7 +1,7 @@
 apiVersion: benchflow.io/v1alpha1
 kind: DeploymentProfile
 metadata:
-  name: dynamo-agg-kv-router-qwen3-32b-ibmcluster
+  name: dynamo-agg-kv-router-qwen3-32b
 spec:
   platform: dynamo
   mode: aggregate
@@ -10,7 +10,7 @@ spec:
   options:
     router_mode: kv
     hf_secret_name: huggingface-token
-    model_cache_pvc: dynamo-model-cache
+    model_cache_pvc: model-cache
     compilation_cache_pvc: compilation-cache
     use_dra_resources: true
     kv_transfer_config: '{"kv_connector":"DynamoConnector","kv_role":"kv_both","kv_connector_module_path":"kvbm.vllm_integration.connector"}'
@@ -25,7 +25,7 @@ spec:
       - --active-prefill-tokens-threshold-frac
       - None
   model_storage:
-    pvc_name: dynamo-model-cache
+    pvc_name: model-cache
     cache_dir: /home/dynamo/.cache/huggingface
     mount_path: /home/dynamo/.cache/huggingface
   runtime:

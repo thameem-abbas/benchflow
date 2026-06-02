@@ -1,0 +1,12 @@
+apiVersion: benchflow.io/v1alpha1
+kind: BenchmarkProfile
+metadata:
+  name: guidellm-concurrent-8k-1k-pd-light
+spec:
+  backend_type: openai_http
+  rate_type: concurrent
+  rates: [1]
+  data: prompt_tokens=8000,output_tokens=1000
+  max_seconds: 300
+  env:
+    GUIDELLM__LOGGING__CONSOLE_LOG_LEVEL: "DEBUG"
