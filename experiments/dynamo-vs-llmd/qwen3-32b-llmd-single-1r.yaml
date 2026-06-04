@@ -1,0 +1,23 @@
+apiVersion: benchflow.io/v1alpha1
+kind: Experiment
+metadata:
+  name: qwen3-32b-llmd-single-1r
+spec:
+  model:
+    name: Qwen/Qwen3-32B-FP8
+  deployment_profile: llm-d-default-routing-ibmcluster
+  benchmark_profile: guidellm-8k-1k
+  metrics_profile: detailed
+  namespace: benchflow
+  execution:
+    timeout: 4h
+  overrides:
+    scale:
+      replicas: 1
+  mlflow:
+    tags:
+      experiment_type: single-replica
+      model: Qwen3-32B-FP8
+      accelerator: H100
+      framework: llm-d
+      replicas: "1"
